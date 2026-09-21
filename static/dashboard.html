@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>LLM Eval Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; }
+    h1 { font-size: 1.4rem; }
+    select { padding: 6px; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; font-size: 0.9rem; }
+    .pass { color: #16a34a; font-weight: 600; }
+    .fail { color: #dc2626; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>LLM Eval Harness — Results Dashboard</h1>
+  <label for="runSelect">Select run: </label>
+  <select id="runSelect"></select>
+
+  <canvas id="scoreChart" height="100"></canvas>
+
+  <table id="resultsTable">
+    <thead>
+      <tr><th>Test ID</th><th>Category</th><th>Score</th><th>Passed</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    let chart;
+
+    async function loadRuns() {
+      const res = await fetch('/evals');
+      const runs = await res.json();
+      const select = document.getElementById('runSelect');
+      select.innerHTML = runs.map(r => `<option value="${r.id}">Run ${r.id} — ${r.suite_name} (${new Date(r.started_at).toLocaleString()})</option>`).join('');
+      if (runs.length > 0) {
+        select.value = runs[runs.length - 1].id;
+        loadRunDetail(select.value);
+      }
+    }
+
+    async function loadRunDetail(runId) {
+      const res = await fetch(`/evals/${runId}`);
+      const data = await res.json();
+      renderChart(data.results);
+      renderTable(data.results);
+    }
+
+    function renderChart(results) {
+      const byCategory = {};
+      results.forEach(r => {
+        if (!byCategory[r.category]) byCategory[r.category] = { pass: 0, total: 0 };
+        byCategory[r.category].total += 1;
+        if (r.passed) byCategory[r.category].pass += 1;
+      });
+
+      const labels = Object.keys(byCategory);
+      const passRates = labels.map(c => (byCategory[c].pass / byCategory[c].total) * 100);
+
+      const ctx = document.getElementById('scoreChart');
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{ label: 'Pass rate (%)', data: passRates, backgroundColor: '#4f46e5' }]
+        },
+        options: {
+          scales: { y: { beginAtZero: true, max: 100 } }
+        }
+      });
+    }
+
+    function renderTable(results) {
+      const tbody = document.querySelector('#resultsTable tbody');
+      tbody.innerHTML = results.map(r => `
+        <tr>
+          <td>${r.test_id}</td>
+          <td>${r.category}</td>
+          <td>${r.score}</td>
+          <td class="${r.passed ? 'pass' : 'fail'}">${r.passed ? 'PASS' : 'FAIL'}</td>
+        </tr>
+      `).join('');
+    }
+
+    document.getElementById('runSelect').addEventListener('change', (e) => loadRunDetail(e.target.value));
+
+    loadRuns();
+  </script>
+</body>
+</html>

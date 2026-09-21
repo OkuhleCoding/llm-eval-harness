@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from harness.db import init_db, SessionLocal, EvalRun, EvalResultRow
 from harness.evaluator import evaluate_suite
 
@@ -9,6 +11,12 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="LLM Eval Harness", lifespan=lifespan)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/")
+def root():
+    return RedirectResponse(url="/static/dashboard.html")
 
 @app.post("/evals/run")
 def trigger_run(suite_name: str = "reasoning"):

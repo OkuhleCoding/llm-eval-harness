@@ -1,5 +1,12 @@
+import pytest
 from fastapi.testclient import TestClient
+from harness.db import init_db
 from main import app
+
+@pytest.fixture(autouse=True)
+def setup_database():
+    """Ensure tables exist before every test, independent of app lifespan quirks."""
+    init_db()
 
 client = TestClient(app)
 
